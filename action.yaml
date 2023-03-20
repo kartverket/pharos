@@ -64,7 +64,7 @@ runs:
     - name: Pull Image to Scan from Docker
       if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
       shell: bash
-      run: docker pull $IMAGE_URL
+      run: docker pull ${{ inputs.image_url }}
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
