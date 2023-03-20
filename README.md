@@ -1,2 +1,3 @@
 # skip-security-scans
-GitHub action for running Security Scans, that should be run before deploying to SKIP
+
+GitHub action for running different Security Scans, that should be run before deploying to SKIP

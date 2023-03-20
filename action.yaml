@@ -2,7 +2,7 @@ name: "SKIP Security Scans"
 branding:
   icon: "compass"
   color: "blue"
-description: "A composite GitHub Action for authenticating with Kartverket and SKIP when using NAIS's salsa action for image provenance."
+description: "GitHub action for running different Security Scans, that should be run before deploying to SKIP"
 inputs:
   image_url:
     description: "An image_url of the form registry/repository:tag or registry/repository@digest"
