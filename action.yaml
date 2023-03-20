@@ -60,7 +60,7 @@ runs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ github.token }}
 
     - name: Pull Image to Scan from Docker
       if: inputs.trivy == true && inputs.image_url != '' && github.event.pull_request.draft == false
@@ -89,7 +89,7 @@ runs:
       shell: bash
       run: |
         content_header="Accept: application/vnd.github+json"
-        auth_header="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"
+        auth_header="Authorization: Bearer ${{ github.token }}"
         base_url="https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?ref=${{ github.ref }}&state=open"
 
         result_severity_check_high=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}&severity=high")
