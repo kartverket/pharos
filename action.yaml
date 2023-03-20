@@ -110,7 +110,7 @@ runs:
       if: inputs.trivy == 'true' || inputs.tfsec == 'true'
       shell: bash
       run: |
-        pr_number=$( echo ${{ env.BRANCH }} | sed 's/\/.*//');
+        pr_number=$( echo ${{ github.ref_name }} | sed 's/\/.*//');
         is_high_vuln_present=${{ steps.severity_check_outputs.outputs.is_high_vuln_present }}
         is_critical_vuln_present=${{ steps.severity_check_outputs.outputs.is_critical_vuln_present }}
 
@@ -124,18 +124,18 @@ runs:
           exit 0;
         fi
 
-        if [[ ${{ env.ALLOW_SEVERITY_LEVEL }} == 'medium' ]]
+        if [[ ${{ inputs.allow_severity_level }} == 'medium' ]]
         then
-          if [[ ${{ env.EVENT_NAME }} == 'pull_request' ]]
+          if [[ ${{ github.event_name }} == 'pull_request' ]]
           then
             echo ""$error_start_message" high or critical. "$error_end_message" "$error_search_pr_message"";
             exit 1;
           else
-            echo ""$error_start_message" high or critical found on branch "${{ env.BRANCH }}". $error_end_message";
+            echo ""$error_start_message" high or critical found on branch "${{ github.ref_name }}". $error_end_message";
             exit 1;
           fi
 
-        elif [[ ${{ env.ALLOW_SEVERITY_LEVEL }} == 'high' ]]
+        elif [[ ${{ inputs.allow_severity_level }} == 'high' ]]
         then
           if [[ $is_critical_vuln_present == 'false' ]]
           then
@@ -143,21 +143,21 @@ runs:
             exit 0;
           fi
 
-          if [[ ${{ env.EVENT_NAME }} == 'pull_request' ]]
+          if [[ ${{ github.event_name }} == 'pull_request' ]]
           then
             echo ""$error_start_message" critical. "$error_end_message" "$error_search_pr_message"";
             exit 1;
           else
-            echo ""$error_start_message" critical found on "${{ env.BRANCH }}" branch. $error_end_message";
+            echo ""$error_start_message" critical found on "${{ github.ref_name }}" branch. $error_end_message";
             exit 1;
           fi
 
-        elif [[ ${{ env.ALLOW_SEVERITY_LEVEL }} == 'critical' ]]
+        elif [[ ${{ inputs.allow_severity_level }} == 'critical' ]]
         then
           echo "High or critical vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to critical.";
           exit 0;
 
         else
-          echo "Input ALLOW_SEVERITY_LEVEL was not one of the known values, found "${{ env.ALLOW_SEVERITY_LEVEL }}". If you see this message, please contact SKIP.";
+          echo "Input ALLOW_SEVERITY_LEVEL was not one of the known values, found "${{ inputs.allow_severity_level }}". If you see this message, please contact SKIP.";
           exit 1;
         fi
