@@ -23,29 +23,28 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
     - name: Check severity level
       if: inputs.allow_severity_level != 'medium' && inputs.allow_severity_level != 'high' && inputs.allow_severity_level != 'critical'
       shell: bash
       run: |
         echo "Error: The input 'allow_severity_level' was not one of the allowed strings, 'high', 'critical' or 'medium'. Found: "$ALLOW_SEVERITY_LEVEL".";
         exit 1;
-
-    - name: Checkout Repository
-      uses: actions/checkout@v3
-
     #
     # TFSec
     #
 
     - name: Run tfsec
       id: tfsec
-      if: inputs.tfsec == true && github.event.pull_request.draft == false
+      if: inputs.tfsec == 'true' && github.event.pull_request.draft == false
       uses: aquasecurity/tfsec-sarif-action@21ded20e8ca120cd9d3d6ab04ef746477542a608
       with:
         sarif_file: tfsec.sarif
 
     - name: Upload SARIF file
-      if: inputs.tfsec == true && github.event.pull_request.draft == false
+      if: inputs.tfsec == 'true' && github.event.pull_request.draft == false
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: tfsec.sarif
@@ -55,7 +54,7 @@ runs:
     #
 
     - name: Log Into GHCR Registry with Token
-      if: inputs.trivy == true && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
       uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
       with:
         registry: ghcr.io
@@ -63,12 +62,12 @@ runs:
         password: ${{ github.token }}
 
     - name: Pull Image to Scan from Docker
-      if: inputs.trivy == true && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
       shell: bash
       run: docker pull $IMAGE_URL
 
     - name: Run Trivy Vulnerability Scanner on Image
-      if: inputs.trivy == true && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
       uses: aquasecurity/trivy-action@1f0aa582c8c8f5f7639610d6d38baddfea4fdcee
       with:
         image-ref: ${{ inputs.image_url }}
@@ -78,13 +77,17 @@ runs:
         timeout: 15m
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
-      if: inputs.trivy == true && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: trivy-results.sarif
 
+    #
+    # Check results
+    #
+
     - name: Set high and critical severity outputs
-      if: inputs.trivy == true || inputs.tfsec == true
+      if: inputs.trivy == 'true' || inputs.tfsec == 'true'
       id: severity_check_outputs
       shell: bash
       run: |
@@ -104,7 +107,7 @@ runs:
 
     - name: Succeed or fail based on severity
       id: severity_check
-      if: inputs.trivy == true || inputs.tfsec == true
+      if: inputs.trivy == 'true' || inputs.tfsec == 'true'
       shell: bash
       run: |
         pr_number=$( echo ${{ env.BRANCH }} | sed 's/\/.*//');
