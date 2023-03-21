@@ -1,6 +1,10 @@
 # Pharos
 
-<sub><sup>_pharos_ - (historical) An ancient lighthouse or beacon to guide sailors.</sup></sub>
+<p align="center">
+<img src="https://i.imgur.com/LUS8fWC.png"  width="20%">
+<br/>
+<sub><i>pharos</i> - (historical) An ancient lighthouse or beacon to guide sailors.</sub>
+</p>
 
 <hr/>
 
