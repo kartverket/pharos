@@ -27,7 +27,7 @@ runs:
       uses: actions/checkout@v3
 
     - name: Check If Both Scans Disabled
-      if: inputs.trivy == 'false' && inputs.tfsec == 'false'
+      if: (inputs.trivy == 'false' || inputs.image_url = '') && inputs.tfsec == 'false'
       shell: bash
       run: |
         echo "Both Trivy and TFSec are disabled. Exiting safely."
