@@ -30,15 +30,8 @@ runs:
       if: (inputs.trivy == 'false' || inputs.image_url == '') && inputs.tfsec == 'false'
       shell: bash
       run: |
-        echo "Both Trivy and TFSec are disabled. Exiting safely."
-        exit 0;
-
-    - name: Check If Draft Pull Request
-      if: github.event.pull_request.draft == true
-      shell: bash
-      run: |
-        echo "Should not run on Draft PR. Exiting safely."
-        exit 0;
+        echo "Error: TFSec is disabled and Trivy was either disabled or an image url was not set. Exiting."
+        exit 1;
 
     - name: Check If Allowed Severity Level
       if: inputs.allow_severity_level != 'medium' && inputs.allow_severity_level != 'high' && inputs.allow_severity_level != 'critical'

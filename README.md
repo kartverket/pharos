@@ -6,7 +6,7 @@
 
 A GitHub action for running different Security Scans, that should be run before deploying to SKIP.
 
-Currently the action contains two scans, TFSec and Trivy. To use Trivy, an image must be provided as an input. Scans will not run on draft pull requests.
+Currently the action contains two scans, TFSec and Trivy. To use Trivy, an image must be provided as an input.
 
 ### Inputs
 
