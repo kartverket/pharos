@@ -1,4 +1,4 @@
-name: "SKIP Security Scans"
+name: "Pharos"
 branding:
   icon: "compass"
   color: "blue"
@@ -16,7 +16,7 @@ inputs:
     required: false
     default: "true"
   allow_severity_level:
-    description: 'A string which determines the highest level of severity the security scans can find while still succeeding workflows. Only "medium", "high" and "critical" values are allowed. Note that these values are case sensitive.'
+    description: "A string which determines the highest level of severity the security scans can find while still succeeding workflows. Only `medium`, `high` and `critical` are allowed as input strings. Note that these values are case sensitive."
     required: false
     default: medium
 
@@ -26,9 +26,18 @@ runs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: Check severity level
+    - name: Check If Both Scans Disabled
+      if: (inputs.trivy == 'false' || inputs.image_url == '') && inputs.tfsec == 'false'
+      shell: bash
+      run: |
+        echo "Error: TFSec is disabled and Trivy was either disabled or an image url was not set. Exiting."
+        exit 1;
+
+    - name: Check If Allowed Severity Level
       if: inputs.allow_severity_level != 'medium' && inputs.allow_severity_level != 'high' && inputs.allow_severity_level != 'critical'
       shell: bash
+      env:
+        ALLOW_SEVERITY_LEVEL: ${{ inputs.allow_severity_level }}
       run: |
         echo "Error: The input 'allow_severity_level' was not one of the allowed strings, 'high', 'critical' or 'medium'. Found: "$ALLOW_SEVERITY_LEVEL".";
         exit 1;
@@ -38,13 +47,13 @@ runs:
 
     - name: Run tfsec
       id: tfsec
-      if: inputs.tfsec == 'true' && github.event.pull_request.draft == false
+      if: inputs.tfsec == 'true'
       uses: aquasecurity/tfsec-sarif-action@21ded20e8ca120cd9d3d6ab04ef746477542a608
       with:
         sarif_file: tfsec.sarif
 
     - name: Upload SARIF file
-      if: inputs.tfsec == 'true' && github.event.pull_request.draft == false
+      if: inputs.tfsec == 'true'
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: tfsec.sarif
@@ -54,7 +63,7 @@ runs:
     #
 
     - name: Log Into GHCR Registry with Token
-      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != ''
       uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
       with:
         registry: ghcr.io
@@ -62,12 +71,14 @@ runs:
         password: ${{ github.token }}
 
     - name: Pull Image to Scan from Docker
-      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != ''
+      env:
+        IMAGE_URL: ${{ inputs.image_url }}
       shell: bash
-      run: docker pull ${{ inputs.image_url }}
+      run: docker pull $IMAGE_URL
 
     - name: Run Trivy Vulnerability Scanner on Image
-      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != ''
       uses: aquasecurity/trivy-action@1f0aa582c8c8f5f7639610d6d38baddfea4fdcee
       with:
         image-ref: ${{ inputs.image_url }}
@@ -77,7 +88,7 @@ runs:
         timeout: 15m
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
-      if: inputs.trivy == 'true' && inputs.image_url != '' && github.event.pull_request.draft == false
+      if: inputs.trivy == 'true' && inputs.image_url != ''
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: trivy-results.sarif
@@ -87,13 +98,16 @@ runs:
     #
 
     - name: Set high and critical severity outputs
-      if: inputs.trivy == 'true' || inputs.tfsec == 'true'
       id: severity_check_outputs
       shell: bash
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         content_header="Accept: application/vnd.github+json"
-        auth_header="Authorization: Bearer ${{ github.token }}"
-        base_url="https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?ref=${{ github.ref }}&state=open"
+        auth_header="Authorization: Bearer $GITHUB_TOKEN"
+        base_url="https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts?ref=$GITHUB_REF&state=open"
 
         result_severity_check_high=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}&severity=high")
         result_severity_check_critical=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}&severity=critical")
@@ -107,10 +121,12 @@ runs:
 
     - name: Succeed or fail based on severity
       id: severity_check
-      if: inputs.trivy == 'true' || inputs.tfsec == 'true'
       shell: bash
+      env:
+        REF_NAME: ${{ github.ref_name }}
+        ALLOW_SEVERITY_LEVEL: ${{ inputs.allow_severity_level }}
       run: |
-        pr_number=$( echo ${{ github.ref_name }} | sed 's/\/.*//');
+        pr_number=$( echo $REF_NAME | sed 's/\/.*//');
         is_high_vuln_present=${{ steps.severity_check_outputs.outputs.is_high_vuln_present }}
         is_critical_vuln_present=${{ steps.severity_check_outputs.outputs.is_critical_vuln_present }}
 
@@ -124,18 +140,18 @@ runs:
           exit 0;
         fi
 
-        if [[ ${{ inputs.allow_severity_level }} == 'medium' ]]
+        if [[ $ALLOW_SEVERITY_LEVEL == 'medium' ]]
         then
           if [[ ${{ github.event_name }} == 'pull_request' ]]
           then
             echo ""$error_start_message" high or critical. "$error_end_message" "$error_search_pr_message"";
             exit 1;
           else
-            echo ""$error_start_message" high or critical found on branch "${{ github.ref_name }}". $error_end_message";
+            echo ""$error_start_message" high or critical found on branch "$REF_NAME". $error_end_message";
             exit 1;
           fi
 
-        elif [[ ${{ inputs.allow_severity_level }} == 'high' ]]
+        elif [[ $ALLOW_SEVERITY_LEVEL == 'high' ]]
         then
           if [[ $is_critical_vuln_present == 'false' ]]
           then
@@ -148,16 +164,16 @@ runs:
             echo ""$error_start_message" critical. "$error_end_message" "$error_search_pr_message"";
             exit 1;
           else
-            echo ""$error_start_message" critical found on "${{ github.ref_name }}" branch. $error_end_message";
+            echo ""$error_start_message" critical found on "$REF_NAME" branch. $error_end_message";
             exit 1;
           fi
 
-        elif [[ ${{ inputs.allow_severity_level }} == 'critical' ]]
+        elif [[ $ALLOW_SEVERITY_LEVEL == 'critical' ]]
         then
           echo "High or critical vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to critical.";
           exit 0;
 
         else
-          echo "Input ALLOW_SEVERITY_LEVEL was not one of the known values, found "${{ inputs.allow_severity_level }}". If you see this message, please contact SKIP.";
+          echo "Input ALLOW_SEVERITY_LEVEL was not one of the known values, found "$ALLOW_SEVERITY_LEVEL". If you see this message, please contact SKIP.";
           exit 1;
         fi
