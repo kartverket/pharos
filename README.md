@@ -39,10 +39,9 @@ pharos-job:
   name: Run Pharos with Required Permissions
   permissions:
     actions: read
-    packages: write
+    packages: read
     contents: read
     security-events: write
-    id-token: write
   runs-on: ubuntu-latest
   steps:
     - name: "Run Pharos"
