@@ -50,4 +50,4 @@ pharos-job:
         image_url: $IMAGE_URL
 ```
 
-Here, the `$IMAGE_URL` variable would typically come from the output of a previous build step.
+Here, the `$IMAGE_URL` variable would typically come from the output of a previous build step or job.
