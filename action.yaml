@@ -19,6 +19,10 @@ inputs:
     description: "A string which determines the highest level of severity the security scans can find while still succeeding workflows. Only `medium`, `high` and `critical` are allowed as input strings. Note that these values are case sensitive."
     required: false
     default: medium
+  trivy_category:
+    description: "A category for describing the Trivy action. Useful for differentiating between different runs of different images."
+    required: false
+    default: "Trivy"
 
 runs:
   using: "composite"
@@ -92,6 +96,7 @@ runs:
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: trivy-results.sarif
+        category: ${{ inputs.trivy_category }}
 
     #
     # Check results
