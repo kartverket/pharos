@@ -22,6 +22,7 @@ As of v0.1.0 only GitHub registries are tested and supported.
 | trivy                |          | An optional boolean that determines whether trivy-scan will be run. Defaults to 'true'.                                                                                                                                             |
 | tfsec                |          | An optional boolean that determines whether tfsec-scan will be run. Defaults to 'true'.                                                                                                                                             |
 | allow_severity_level |          | A string which determines the highest level of severity the security scans can find while still succeeding workflows. Only `medium`, `high` and `critical` are allowed as input strings. Note that these values are case sensitive. |
+| trivy_category       |          | A category for describing the Trivy action. Useful for differentiating between different runs of different images.                                                                                                                  |
 
 ### Example usage
 
