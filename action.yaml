@@ -83,7 +83,7 @@ runs:
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: aquasecurity/trivy-action@2b6a709cf9c4025c5438138008beaddbb02086f0
+      uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601
       with:
         image-ref: ${{ inputs.image_url }}
         format: sarif
