@@ -19,6 +19,10 @@ inputs:
     description: "A string which determines the highest level of severity the security scans can find while still succeeding workflows. Only `medium`, `high` and `critical` are allowed as input strings. Note that these values are case sensitive."
     required: false
     default: medium
+  disable_severity_check:
+    description: "Skip checking severity of scan results. Useful when running the action ad-hoc to update the Github security status."
+    required: false
+    default: "false"
   trivy_category:
     description: "A category for describing the Trivy action. Useful for differentiating between different runs of different images."
     required: false
@@ -103,6 +107,7 @@ runs:
     #
 
     - name: Set high and critical severity outputs
+      if: inputs.disable_severity_check != "true"
       id: severity_check_outputs
       shell: bash
       env:
@@ -125,6 +130,7 @@ runs:
         echo "is_critical_vuln_present=$is_critical_vuln_present" >> $GITHUB_OUTPUT
 
     - name: Succeed or fail based on severity
+      if: inputs.disable_severity_check != "true"
       id: severity_check
       shell: bash
       env:
