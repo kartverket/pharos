@@ -107,7 +107,7 @@ runs:
     #
 
     - name: Set high and critical severity outputs
-      if: ${{ inputs.disable_severity_check != "true" }}
+      if: inputs.disable_severity_check != 'true'
       id: severity_check_outputs
       shell: bash
       env:
@@ -130,7 +130,7 @@ runs:
         echo "is_critical_vuln_present=$is_critical_vuln_present" >> $GITHUB_OUTPUT
 
     - name: Succeed or fail based on severity
-      if: ${{ inputs.disable_severity_check != "true" }}
+      if: inputs.disable_severity_check != 'true'
       id: severity_check
       shell: bash
       env:
