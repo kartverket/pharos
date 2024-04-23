@@ -192,6 +192,8 @@ runs:
           fi
 
         fi
+        
+        [[ ${_exit_code} -gt 0 ]] && _summary_prefix=":x: " || _summary_prefix=""
         echo "${_message}";
-        echo "${_message}" >> $GITHUB_STEP_SUMMARY;
+        echo "${_summary_prefix}${_message}" >> $GITHUB_STEP_SUMMARY;
         exit ${_exit_code};
