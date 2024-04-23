@@ -145,46 +145,53 @@ runs:
         error_end_message="Go to the Code Scanning section of the GitHub Security tab to review these vulnerabilities."
         error_search_pr_message="Search for is:open pr:"$pr_number" to find PR related vulnerabilities."
 
+        _message="Undefined. Bug in this action. Fix."
+        _exit_code=0
+
         if [[ $is_high_vuln_present == 'false' &&  $is_critical_vuln_present == 'false' ]]
         then
-          echo "Success! No high or critical code scanning alerts.";
-          exit 0;
-        fi
-
-        if [[ $ALLOW_SEVERITY_LEVEL == 'medium' ]]
-        then
-          if [[ ${{ github.event_name }} == 'pull_request' ]]
-          then
-            echo ""$error_start_message" high or critical. "$error_end_message" "$error_search_pr_message"";
-            exit 1;
-          else
-            echo ""$error_start_message" high or critical found on branch "$REF_NAME". $error_end_message";
-            exit 1;
-          fi
-
-        elif [[ $ALLOW_SEVERITY_LEVEL == 'high' ]]
-        then
-          if [[ $is_critical_vuln_present == 'false' ]]
-          then
-            echo "Only high vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to high.";
-            exit 0;
-          fi
-
-          if [[ ${{ github.event_name }} == 'pull_request' ]]
-          then
-            echo ""$error_start_message" critical. "$error_end_message" "$error_search_pr_message"";
-            exit 1;
-          else
-            echo ""$error_start_message" critical found on "$REF_NAME" branch. $error_end_message";
-            exit 1;
-          fi
-
-        elif [[ $ALLOW_SEVERITY_LEVEL == 'critical' ]]
-        then
-          echo "High or critical vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to critical.";
-          exit 0;
-
+          _message="Success! No high or critical code scanning alerts."
+          _exit_code=0;
         else
-          echo "Input ALLOW_SEVERITY_LEVEL was not one of the known values, found "$ALLOW_SEVERITY_LEVEL". If you see this message, please contact SKIP.";
-          exit 1;
+          if [[ $ALLOW_SEVERITY_LEVEL == 'medium' ]]
+          then
+            if [[ ${{ github.event_name }} == 'pull_request' ]]
+            then
+              _message="$error_start_message high or critical. $error_end_message $error_search_pr_message";
+              _exit_code=1
+            else
+              _message="$error_start_message high or critical found on branch '$REF_NAME'. $error_end_message";
+              _exit_code=1;
+            fi
+  
+          elif [[ $ALLOW_SEVERITY_LEVEL == 'high' ]]
+          then
+            if [[ $is_critical_vuln_present == 'false' ]]
+            then
+              _message="Only high vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to high.";
+              _exit_code=0;
+            fi
+  
+            if [[ ${{ github.event_name }} == 'pull_request' ]]
+            then
+              _message="$error_start_message critical. $error_end_message $error_search_pr_message";
+              _exit_code=1
+            else
+              _message="$error_start_message critical found on '$REF_NAME' branch. $error_end_message";
+              _exit_code=1
+            fi
+  
+          elif [[ $ALLOW_SEVERITY_LEVEL == 'critical' ]]
+          then
+            _message="High or critical vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to critical.";
+            _exit_code=0;
+  
+          else
+            _message="Input 'ALLOW_SEVERITY_LEVEL' was not one of the known values, found '$ALLOW_SEVERITY_LEVEL'. If you see this message, please contact SKIP.";
+            _exit_code=1
+          fi
+
         fi
+        echo "${_message}";
+        echo "${_message}" >> $GITHUB_STEP_SUMMARY;
+        exit ${_exit_code};
