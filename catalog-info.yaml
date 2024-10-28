@@ -10,29 +10,3 @@ spec:
   lifecycle: "production"
   owner: "skip"
   system: "skip"
----
-apiVersion: "backstage.io/v1alpha1"
-kind: "Group"
-metadata:
-  name: "security_champion_pharos"
-  title: "Security Champion pharos"
-spec:
-  type: "security_champion"
-  parent: "it_security_champions"
-  members:
-  - "omaen"
-  children:
-  - "resource:pharos"
----
-apiVersion: "backstage.io/v1alpha1"
-kind: "Resource"
-metadata:
-  name: "pharos"
-  links:
-  - url: "https://github.com/kartverket/pharos"
-    title: "pharos på GitHub"
-spec:
-  type: "repo"
-  owner: "security_champion_pharos"
-  dependencyOf:
-  - "component:pharos"
