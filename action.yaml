@@ -49,22 +49,26 @@ runs:
       run: |
         echo "Error: The input 'allow_severity_level' was not one of the allowed strings, 'high', 'critical' or 'medium'. Found: "$ALLOW_SEVERITY_LEVEL".";
         exit 1;
+
     #
-    # TFSec
+    # Trivy config scan (previously TFsec)
     #
 
-    - name: Run tfsec
-      id: tfsec
+    - name: Run Trivy config scan
       if: inputs.tfsec == 'true'
-      uses: aquasecurity/tfsec-sarif-action@21ded20e8ca120cd9d3d6ab04ef746477542a608
+      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0
       with:
-        sarif_file: tfsec.sarif
+        scan-type: 'config'
+        format: sarif
+        output: trivy-config.sarif
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+        timeout: 15m
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
       uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: tfsec.sarif
+        sarif_file: trivy-config.sarif
 
     #
     # Trivy
@@ -83,7 +87,7 @@ runs:
       env:
         IMAGE_URL: ${{ inputs.image_url }}
       shell: bash
-      run: docker pull $IMAGE_URL
+      run: docker pull "$IMAGE_URL"
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != ''
@@ -94,6 +98,8 @@ runs:
         output: trivy-results.sarif
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        # No need to setup Trivy again, if the config scan is enabled and ran first
+        skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
       if: inputs.trivy == 'true' && inputs.image_url != ''
