@@ -27,12 +27,35 @@ inputs:
     description: "A category for describing the Trivy action. Useful for differentiating between different runs of different images."
     required: false
     default: "Trivy"
+  scan_platform_modules:
+    description: "If you need to use terraform platform modules (github.com/kartverket/terraform-modules)"
+    required: false
+    default: "false"
+  skip_dirs:
+    description: "comma seperated list of directories where traversal is skipped"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
   steps:
-    - name: Checkout Repository
+    - uses: octo-sts/action@6177b4481c00308b3839969c3eca88c96a91775f # v1.0.0
+      if: inputs.scan_platform_modules == 'true'
+      id: octo-sts
+      with:
+        scope: kartverket
+        identity: kartverket_repos
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
       uses: actions/checkout@v4
+      with:
+        submodules: ${{ inputs.checkout_submodules == 'true' && 'recursive' || 'false' }}
+        token: ${{ inputs.checkout_submodules == 'true' && steps.octo-sts.outputs.token || github.token }}
+
+    - name: hack for github internal repo access
+      if: inputs.scan_platform_modules == 'true'
+      run: git config --global url."https://x-access-token:${{ steps.octo-sts.outputs.token }}@github.com".insteadOf ssh://git@github.com
+      shell: bash
 
     - name: Check If Both Scans Disabled
       if: (inputs.trivy == 'false' || inputs.image_url == '') && inputs.tfsec == 'false'
@@ -63,6 +86,7 @@ runs:
         output: trivy-config.sarif
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        skip-dirs: ${{ inputs.skip_dirs }}
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
@@ -169,7 +193,7 @@ runs:
               _message="$error_start_message high or critical found on branch '$REF_NAME'. $error_end_message";
               _exit_code=1;
             fi
-  
+        
           elif [[ $ALLOW_SEVERITY_LEVEL == 'high' ]]
           then
             if [[ $is_critical_vuln_present == 'false' ]]
@@ -177,7 +201,7 @@ runs:
               _message="Only high vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to high.";
               _exit_code=0;
             fi
-  
+        
             if [[ ${{ github.event_name }} == 'pull_request' ]]
             then
               _message="$error_start_message critical. $error_end_message $error_search_pr_message";
@@ -186,12 +210,12 @@ runs:
               _message="$error_start_message critical found on '$REF_NAME' branch. $error_end_message";
               _exit_code=1
             fi
-  
+        
           elif [[ $ALLOW_SEVERITY_LEVEL == 'critical' ]]
           then
             _message="High or critical vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to critical.";
             _exit_code=0;
-  
+        
           else
             _message="Input 'ALLOW_SEVERITY_LEVEL' was not one of the known values, found '$ALLOW_SEVERITY_LEVEL'. If you see this message, please contact SKIP.";
             _exit_code=1
