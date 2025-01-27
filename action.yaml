@@ -87,6 +87,7 @@ runs:
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
         skip-dirs: ${{ inputs.skip_dirs }}
+        version: 'v0.58.2'
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
