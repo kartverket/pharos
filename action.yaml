@@ -32,9 +32,13 @@ inputs:
     required: false
     default: "false"
   skip_dirs:
-    description: "comma seperated list of directories where traversal is skipped"
+    description: "Comma seperated list of directories where traversal is skipped"
     required: false
     default: ""
+  skip_files:
+    description: "Comma seperated list of files where traversal is skipped"
+    required: false
+    default: "catalog-info.yaml"
 
 runs:
   using: "composite"
@@ -87,6 +91,7 @@ runs:
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
         skip-dirs: ${{ inputs.skip_dirs }}
+        skip-files: ${{ inputs.skip_files }}
         version: 'v0.58.2'
 
     - name: Upload SARIF file
