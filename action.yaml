@@ -206,9 +206,8 @@ runs:
             then
               _message="Only high vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to high.";
               _exit_code=0;
-            fi
-        
-            if [[ ${{ github.event_name }} == 'pull_request' ]]
+              
+            elif [[ ${{ github.event_name }} == 'pull_request' ]]
             then
               _message="$error_start_message critical. $error_end_message $error_search_pr_message";
               _exit_code=1
