@@ -51,7 +51,7 @@ runs:
         identity: kartverket_repos
     # Checkout the repository to the GitHub Actions runner
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         submodules: ${{ inputs.checkout_submodules == 'true' && 'recursive' || 'false' }}
         token: ${{ inputs.checkout_submodules == 'true' && steps.octo-sts.outputs.token || github.token }}
