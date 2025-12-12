@@ -39,6 +39,10 @@ inputs:
     description: "Comma seperated list of files where traversal is skipped"
     required: false
     default: "catalog-info.yaml"
+  trivy_version:
+    description: "The version of Trivy to use for scanning"
+    required: false
+    default: "v0.67.0"
 
 runs:
   using: "composite"
@@ -92,7 +96,7 @@ runs:
         timeout: 15m
         skip-dirs: ${{ inputs.skip_dirs }}
         skip-files: ${{ inputs.skip_files }}
-        version: 'v0.67.0'
+        version: ${{ inputs.trivy_version }}
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
@@ -128,6 +132,7 @@ runs:
         output: trivy-results.sarif
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        version: ${{ inputs.trivy_version }}
         # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
