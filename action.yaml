@@ -158,7 +158,7 @@ runs:
         base_url="https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts"
         query_params="?ref=$GITHUB_REF&state=open&per_page=100"
         
-        alerts=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}"
+        alerts=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}")
         
         high_count=$(jq --arg cat "$SCAN_CATEGORY" 'map(select(.analysis_key.category == $cat and .severity == "high")) | length' <<< "$alerts")
         critical_count=$(jq --arg cat "$SCAN_CATEGORY" 'map(select(.analysis_key.category == $cat and(.severity == "critical" or .severity == "error"))) | length' <<< "$alerts")
