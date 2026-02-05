@@ -150,14 +150,23 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_REF: ${{ github.ref }}
         GITHUB_TOKEN: ${{ github.token }}
+        IMAGE_URL: ${{ inputs.image_url }}
       run: |
         content_header="Accept: application/vnd.github+json"
         auth_header="Authorization: Bearer $GITHUB_TOKEN"
-        base_url="https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts?ref=$GITHUB_REF&state=open"
+        base_url="https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts"
 
-        result_severity_check_high=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}&severity=high")
-        result_severity_check_critical=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}&severity=critical")
-        result_severity_check_error=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}&severity=error")
+        if [[ "${{ inputs.trivy }}" == 'true' ]]
+        then
+          path=$(echo "${IMAGE_URL#*/}" | sed 's|[:@].*$||')
+          query_params="?ref=$GITHUB_REF&state=open&tool_name=Trivy&path=$path"
+        else
+          query_params="?ref=$GITHUB_REF&state=open"
+        fi
+        
+        result_severity_check_high=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}&severity=high")
+        result_severity_check_critical=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}&severity=critical")
+        result_severity_check_error=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}&severity=error")
 
         is_high_vuln_present=$([[ "$result_severity_check_high" =~ [a-zA-Z] ]] && echo "true" || echo "false")
         is_critical_vuln_present=$([[ "$result_severity_check_critical" =~ [a-zA-Z] || "$result_severity_check_error" =~ [a-zA-Z] ]] && echo "true" || echo "false")
