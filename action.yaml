@@ -99,6 +99,7 @@ runs:
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: trivy-config.sarif
+        category: trivy-config
 
     #
     # Trivy
@@ -150,29 +151,20 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_REF: ${{ github.ref }}
         GITHUB_TOKEN: ${{ github.token }}
-        IMAGE_URL: ${{ inputs.image_url }}
+        SCAN_CATEGORY: ${{ inputs.trivy_category }}
       run: |
         content_header="Accept: application/vnd.github+json"
         auth_header="Authorization: Bearer $GITHUB_TOKEN"
         base_url="https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts"
-
-        if [[ "${{ inputs.trivy }}" == 'true' ]]
-        then
-          query_path=$(echo "${IMAGE_URL#*/}" | sed 's|[:@].*$||')
-          query_params="?ref=$GITHUB_REF&state=open&tool_name=Trivy&path=$query_path"
-        else
-          query_params="?ref=$GITHUB_REF&state=open"
-        fi
+        query_params="?ref=$GITHUB_REF&state=open&per_page=100"
         
-        result_severity_check_high=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}&severity=high")
-        result_severity_check_critical=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}&severity=critical")
-        result_severity_check_error=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}&severity=error")
-
-        is_high_vuln_present=$([[ "$result_severity_check_high" =~ [a-zA-Z] ]] && echo "true" || echo "false")
-        is_critical_vuln_present=$([[ "$result_severity_check_critical" =~ [a-zA-Z] || "$result_severity_check_error" =~ [a-zA-Z] ]] && echo "true" || echo "false")
-
-        echo "is_high_vuln_present=$is_high_vuln_present" >> $GITHUB_OUTPUT
-        echo "is_critical_vuln_present=$is_critical_vuln_present" >> $GITHUB_OUTPUT
+        alerts=$(curl -s -H "$content_header" -H "$auth_header" "${base_url}${query_params}"
+        
+        high_count=$(jq --arg cat "$SCAN_CATEGORY" 'map(select(.analysis_key.category == $cat and .severity == "high")) | length' <<< "$alerts")
+        critical_count=$(jq --arg cat "$SCAN_CATEGORY" 'map(select(.analysis_key.category == $cat and(.severity == "critical" or .severity == "error"))) | length' <<< "$alerts")
+        
+        echo "is_high_vuln_present=$([ "$high_count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        echo "is_critical_vuln_present=$([ "$critical_count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
     - name: Succeed or fail based on severity
       if: inputs.disable_severity_check != 'true'
