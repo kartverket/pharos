@@ -158,8 +158,8 @@ runs:
 
         if [[ "${{ inputs.trivy }}" == 'true' ]]
         then
-          path=$(echo "${IMAGE_URL#*/}" | sed 's|[:@].*$||')
-          query_params="?ref=$GITHUB_REF&state=open&tool_name=Trivy&path=$path"
+          query_path=$(echo "${IMAGE_URL#*/}" | sed 's|[:@].*$||')
+          query_params="?ref=$GITHUB_REF&state=open&tool_name=Trivy&path=$query_path"
         else
           query_params="?ref=$GITHUB_REF&state=open"
         fi
