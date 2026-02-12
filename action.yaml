@@ -194,15 +194,9 @@ runs:
         ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
           --apiurl ${SYSDIG_SECURE_ENDPOINT} \
           --console-log \
-          --json-scan-result report.json \
+          --output=json-file=report.json \
+          --output-schema=v1beta3 \
           "$IMAGE_URL"
-
-    - name: Upload Sysdig CLI scan to GitHub Security Tab
-      if: inputs.sysdig == 'true' && inputs.image_url != ''
-      uses: github/codeql-action/upload-sarif@v4
-      with:
-        sarif_file: sysdig-cli-scanner.sarif
-        category: sysdig-cli-scanner
 
     - name: Generate SARIF report
       if: inputs.sysdig == 'true' && inputs.image_url != ''
