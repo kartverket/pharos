@@ -170,6 +170,7 @@ runs:
       shell: bash
       env:
         SECURE_API_TOKEN: ${{ secrets.SECURE_API_TOKEN }}
+        SYSDIG_SECURE_ENDPOINT: "https://eu1.app.sysdig.com"
         IMAGE_URL: ${{ inputs.image_url }}
       run: |
         ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
@@ -184,6 +185,7 @@ runs:
       shell: bash
       env:
         SECURE_API_TOKEN: ${{ secrets.SECURE_API_TOKEN }}
+        SYSDIG_SECURE_ENDPOINT: "https://eu1.app.sysdig.com"
         IMAGE_URL: ${{ inputs.image_url }}
       run: |
         ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
