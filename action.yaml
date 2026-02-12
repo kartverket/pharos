@@ -203,7 +203,7 @@ runs:
       id: convert_sysdig_to_sarif
       shell: bash
       run: |
-        python3 sysdig-to-sarif.py report.json > results.sarif
+        python3 ${{ github.action_path }}/sysdig-to-sarif.py report.json > results.sarif
 
     - name: Upload scan results to GitHub Security tab
       if: inputs.sysdig == 'true'
