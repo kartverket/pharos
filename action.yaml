@@ -11,6 +11,10 @@ inputs:
     description: "A boolean which determines whether or not Trivy vulnerability scan will be run. Defaults to true"
     required: false
     default: "true"
+  sysdig:
+    description: "A boolean which determines whether or not Sysdig vulnerability scan will be run. Defaults to false"
+    required: false
+    default: "false"
   tfsec:
     description: "A boolean which determines whether or not TFSec security scan will be run. Defaults to true"
     required: false
@@ -132,12 +136,81 @@ runs:
         # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
+    - name: Setup cache
+      if: inputs.sysdig == 'true'
+      uses: actions/cache@v3
+      with:
+        path: cache
+        key: ${{ runner.os }}-cache-${{ hashFiles('**/sysdig-cli-scanner', '**/latest_version.txt', '**/db/main.db.meta.json', '**/scanner-cache/inlineScannerCache.db') }}
+        restore-keys: ${{ runner.os }}-cache-
+
+    - name: Download sysdig-cli-scanner if needed
+      if: inputs.sysdig == 'true'
+      shell: bash
+      run:  |
+        curl -sLO https://download.sysdig.com/scanning/sysdig-cli-scanner/latest_version.txt
+        mkdir -p ${GITHUB_WORKSPACE}/cache/db/
+        if [ ! -f ${GITHUB_WORKSPACE}/cache/latest_version.txt ] || [ $(cat ./latest_version.txt) != $(cat ${GITHUB_WORKSPACE}/cache/latest_version.txt) ]; then
+          cp ./latest_version.txt ${GITHUB_WORKSPACE}/cache/latest_version.txt
+          curl -sL -o ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner "https://download.sysdig.com/scanning/bin/sysdig-cli-scanner/$(cat ${GITHUB_WORKSPACE}/cache/latest_version.txt)/linux/amd64/sysdig-cli-scanner"
+          chmod +x ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner
+        else
+          echo "sysdig-cli-scanner latest version already downloaded"
+        fi
+
+    - name: Scan the image using sysdig-cli-scanner
+      if: inputs.sysdig == 'true' && inputs.image_url != ''
+      shell: bash
+      env:
+        SECURE_API_TOKEN: ${{ secrets.SECURE_API_TOKEN }}
+      run: |
+        ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
+          --apiurl ${SYSDIG_SECURE_ENDPOINT} \
+          ${{ inputs.image_url }} \
+          docker://${REGISTRY_HOST}/${{ secrets.REGISTRY_USER }}/${IMAGE_NAME}:${IMAGE_TAG} \
+          --console-log \
+          --dbpath=${GITHUB_WORKSPACE}/cache/db/ \
+          --cachepath=${GITHUB_WORKSPACE}/cache/scanner-cache/
+
     - name: Upload Trivy Scan Results to GitHub Security Tab
       if: inputs.trivy == 'true' && inputs.image_url != ''
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.trivy_category }}
+
+    - name: Scan the image using sysdig-cli-scanner
+      if: inputs.sysdig == 'true' && inputs.image_url != ''
+      shell: bash
+      env:
+        SECURE_API_TOKEN: ${{ secrets.SECURE_API_TOKEN }}
+      run: |
+        ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
+          --apiurl ${SYSDIG_SECURE_ENDPOINT} \
+          --console-log \
+          --json-scan-result report.json \
+          ${{ inputs.image_url }}
+
+    - name: Upload Sysdig CLI scan to GitHub Security Tab
+      if: inputs.sysdig == 'true' && inputs.image_url != ''
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: sysdig-cli-scanner.sarif
+        category: sysdig-cli-scanner
+
+    - name: Generate SARIF report
+      if: inputs.sysdig == 'true' && inputs.image_url != ''
+      id: convert_sysdig_to_sarif
+      shell: bash
+      run: |
+        python3 sysdig-to-sarif.py report.json > results.sarif
+
+    - name: Upload scan results to GitHub Security tab
+      if: inputs.sysdig == 'true' && step.convert_sysdig_to_sarif.outcome == 'success'
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: results.sarif
+        category: sysdig-cli-scanner
 
     #
     # Check results
