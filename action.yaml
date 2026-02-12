@@ -170,25 +170,27 @@ runs:
       shell: bash
       env:
         SECURE_API_TOKEN: ${{ secrets.SECURE_API_TOKEN }}
+        IMAGE_URL: ${{ inputs.image_url }}
       run: |
         ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
           --apiurl ${SYSDIG_SECURE_ENDPOINT} \
-          docker://${{ inputs.image_url }} \
           --console-log \
           --dbpath=${GITHUB_WORKSPACE}/cache/db/ \
-          --cachepath=${GITHUB_WORKSPACE}/cache/scanner-cache/
+          --cachepath=${GITHUB_WORKSPACE}/cache/scanner-cache/ \
+          "$IMAGE_URL"
 
     - name: Scan the image using sysdig-cli-scanner for SARIF output
       if: inputs.sysdig == 'true' && inputs.image_url != ''
       shell: bash
       env:
         SECURE_API_TOKEN: ${{ secrets.SECURE_API_TOKEN }}
+        IMAGE_URL: ${{ inputs.image_url }}
       run: |
         ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
           --apiurl ${SYSDIG_SECURE_ENDPOINT} \
           --console-log \
           --json-scan-result report.json \
-          docker://${{ inputs.image_url }}
+          "$IMAGE_URL"
 
     - name: Upload Sysdig CLI scan to GitHub Security Tab
       if: inputs.sysdig == 'true' && inputs.image_url != ''
