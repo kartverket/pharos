@@ -136,6 +136,13 @@ runs:
         # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
+    - name: Upload Trivy Scan Results to GitHub Security Tab
+      if: inputs.trivy == 'true' && inputs.image_url != ''
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: trivy-results.sarif
+        category: ${{ inputs.trivy_category }}
+
     - name: Setup cache
       if: inputs.sysdig == 'true'
       uses: actions/cache@v3
@@ -166,20 +173,12 @@ runs:
       run: |
         ${GITHUB_WORKSPACE}/cache/sysdig-cli-scanner \
           --apiurl ${SYSDIG_SECURE_ENDPOINT} \
-          ${{ inputs.image_url }} \
-          docker://${REGISTRY_HOST}/${{ secrets.REGISTRY_USER }}/${IMAGE_NAME}:${IMAGE_TAG} \
+          docker://${{ inputs.image_url }} \
           --console-log \
           --dbpath=${GITHUB_WORKSPACE}/cache/db/ \
           --cachepath=${GITHUB_WORKSPACE}/cache/scanner-cache/
 
-    - name: Upload Trivy Scan Results to GitHub Security Tab
-      if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: github/codeql-action/upload-sarif@v4
-      with:
-        sarif_file: trivy-results.sarif
-        category: ${{ inputs.trivy_category }}
-
-    - name: Scan the image using sysdig-cli-scanner
+    - name: Scan the image using sysdig-cli-scanner for SARIF output
       if: inputs.sysdig == 'true' && inputs.image_url != ''
       shell: bash
       env:
@@ -189,7 +188,7 @@ runs:
           --apiurl ${SYSDIG_SECURE_ENDPOINT} \
           --console-log \
           --json-scan-result report.json \
-          ${{ inputs.image_url }}
+          docker://${{ inputs.image_url }}
 
     - name: Upload Sysdig CLI scan to GitHub Security Tab
       if: inputs.sysdig == 'true' && inputs.image_url != ''
@@ -206,7 +205,7 @@ runs:
         python3 sysdig-to-sarif.py report.json > results.sarif
 
     - name: Upload scan results to GitHub Security tab
-      if: inputs.sysdig == 'true' && step.convert_sysdig_to_sarif.outcome == 'success'
+      if: inputs.sysdig == 'true'
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: results.sarif
