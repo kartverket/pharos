@@ -92,7 +92,7 @@ runs:
         timeout: 15m
         skip-dirs: ${{ inputs.skip_dirs }}
         skip-files: ${{ inputs.skip_files }}
-        version: 'v0.67.0'
+        version: 'v0.69.2'
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
