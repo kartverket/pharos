@@ -69,7 +69,7 @@ runs:
       shell: bash
 
     - name: Check If Both Scans Disabled
-      if: (inputs.trivy == 'false' || inputs.image_url == '') && inputs.tfsec == 'false'
+      if: (inputs.trivy == 'false' || inputs.image_url == '' || inputs.sysdig == 'false') && inputs.tfsec == 'false'
       shell: bash
       run: |
         echo "Error: TFSec is disabled and Trivy was either disabled or an image url was not set. Exiting."
