@@ -83,7 +83,7 @@ runs:
 
     - name: Run Trivy config scan
       if: inputs.tfsec == 'true'
-      uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518
+      uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478
       with:
         scan-type: 'config'
         format: sarif
@@ -122,7 +122,7 @@ runs:
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518
+      uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478
       with:
         image-ref: ${{ inputs.image_url }}
         format: sarif
