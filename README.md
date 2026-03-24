@@ -47,7 +47,7 @@ pharos-job:
   runs-on: ubuntu-latest
   steps:
     - name: "Run Pharos"
-      uses: kartverket/pharos@v0.2.5
+      uses: kartverket/pharos@112c1589d5022bc0cdf3353cb4c6047aa4a3a26f #v0.6.2 
       with:
         image_url: $IMAGE_URL
 ```
