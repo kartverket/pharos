@@ -51,7 +51,7 @@ runs:
         identity: kartverket_repos
     # Checkout the repository to the GitHub Actions runner
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         submodules: ${{ inputs.checkout_submodules == 'true' && 'recursive' || 'false' }}
         token: ${{ inputs.checkout_submodules == 'true' && steps.octo-sts.outputs.token || github.token }}
@@ -83,7 +83,7 @@ runs:
 
     - name: Run Trivy config scan
       if: inputs.tfsec == 'true'
-      uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
       with:
         scan-type: 'config'
         format: sarif
@@ -95,7 +95,7 @@ runs:
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4.34.1
       with:
         sarif_file: trivy-config.sarif
         category: trivy-config
@@ -106,7 +106,7 @@ runs:
 
     - name: Log Into GHCR Registry with Token
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+      uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -121,7 +121,7 @@ runs:
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
       with:
         image-ref: ${{ inputs.image_url }}
         format: sarif
@@ -133,7 +133,7 @@ runs:
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4.34.1
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.trivy_category }}
