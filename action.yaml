@@ -51,15 +51,18 @@ runs:
         identity: kartverket_repos
     # Checkout the repository to the GitHub Actions runner
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        persist-credentials: false
         submodules: ${{ inputs.checkout_submodules == 'true' && 'recursive' || 'false' }}
         token: ${{ inputs.checkout_submodules == 'true' && steps.octo-sts.outputs.token || github.token }}
 
     - name: hack for github internal repo access
       if: inputs.scan_platform_modules == 'true'
-      run: git config --global url."https://x-access-token:${{ steps.octo-sts.outputs.token }}@github.com".insteadOf ssh://git@github.com
+      run: git config --global url."https://x-access-token:${OCTO_STS_TOKEN}@github.com".insteadOf ssh://git@github.com
       shell: bash
+      env:
+        OCTO_STS_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
     - name: Check If Both Scans Disabled
       if: (inputs.trivy == 'false' || inputs.image_url == '') && inputs.tfsec == 'false'
@@ -83,7 +86,7 @@ runs:
 
     - name: Run Trivy config scan
       if: inputs.tfsec == 'true'
-      uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
       with:
         scan-type: 'config'
         format: sarif
@@ -95,7 +98,7 @@ runs:
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4.34.1
       with:
         sarif_file: trivy-config.sarif
         category: trivy-config
@@ -106,7 +109,7 @@ runs:
 
     - name: Log Into GHCR Registry with Token
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+      uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -121,7 +124,7 @@ runs:
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
       with:
         image-ref: ${{ inputs.image_url }}
         format: sarif
@@ -133,7 +136,7 @@ runs:
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4.34.1
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.trivy_category }}
@@ -175,10 +178,10 @@ runs:
       env:
         REF_NAME: ${{ github.ref_name }}
         ALLOW_SEVERITY_LEVEL: ${{ inputs.allow_severity_level }}
+        IS_HIGH_VULN_PRESENT: ${{ steps.severity_check_outputs.outputs.is_high_vuln_present }}
+        IS_CRITICAL_VULN_PRESENT: ${{ steps.severity_check_outputs.outputs.is_critical_vuln_present }}
       run: |
         pr_number=$( echo $REF_NAME | sed 's/\/.*//');
-        is_high_vuln_present=${{ steps.severity_check_outputs.outputs.is_high_vuln_present }}
-        is_critical_vuln_present=${{ steps.severity_check_outputs.outputs.is_critical_vuln_present }}
 
         error_start_message="Error: Vulnerabilities were found of level"
         error_end_message="Go to the Code Scanning section of the GitHub Security tab to review these vulnerabilities."
@@ -187,7 +190,7 @@ runs:
         _message="Undefined. Bug in this action. Fix."
         _exit_code=0
 
-        if [[ $is_high_vuln_present == 'false' &&  $is_critical_vuln_present == 'false' ]]
+        if [[ $IS_HIGH_VULN_PRESENT == 'false' &&  $IS_CRITICAL_VULN_PRESENT == 'false' ]]
         then
           _message="Success! No high or critical code scanning alerts."
           _exit_code=0;
@@ -205,7 +208,7 @@ runs:
         
           elif [[ $ALLOW_SEVERITY_LEVEL == 'high' ]]
           then
-            if [[ $is_critical_vuln_present == 'false' ]]
+            if [[ $IS_CRITICAL_VULN_PRESENT == 'false' ]]
             then
               _message="Only high vulnerabilities detected! Allowing due to input ALLOW_SEVERITY_LEVEL being set to high.";
               _exit_code=0;
