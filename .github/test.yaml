@@ -1,3 +1,4 @@
+# This is a test workflow for Pharos. It runs on push events to the trivy-with-vex branch and executes the Pharos action with specified parameters.
 name: Test Pharos
 on:
   push:
