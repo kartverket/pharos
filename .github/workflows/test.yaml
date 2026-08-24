@@ -7,13 +7,13 @@ on:
 jobs:
   test-pharos:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
       - name: Run Pharos
-        uses: ./action.yaml
+        uses: ./
         with:
           image_url: python:3.4-alpine 
           trivy_vex: true
