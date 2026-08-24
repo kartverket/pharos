@@ -1,0 +1,14 @@
+name: Test Pharos
+on:
+  push:
+    branches:
+      - trivy-with-vex
+jobs:
+  test-pharos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Pharos
+        uses: ./action.yaml # v0.6.3
+        with:
+          image_url: python:3.4-alpine 
+          trivy_vex: true
