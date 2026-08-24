@@ -11,6 +11,10 @@ inputs:
     description: "A boolean which determines whether or not Trivy vulnerability scan will be run. Defaults to true"
     required: false
     default: "true"
+  trivy_vex:
+    description: "Enable VEX filtering for Trivy vulnerability scans on images. Defaults to false"
+    required: false
+    default: "false"
   tfsec:
     description: "A boolean which determines whether or not TFSec security scan will be run. Defaults to true"
     required: false
@@ -122,8 +126,40 @@ runs:
       shell: bash
       run: docker pull "$IMAGE_URL"
 
+    - name: Configure Trivy VEX repositories
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
+      shell: bash
+      run: |
+        mkdir -p "$HOME/.trivy/vex"
+
+        cat > "$HOME/.trivy/vex/repository.yaml" <<'EOF'
+        repositories:
+          - name: default
+            url: https://github.com/aquasecurity/vexhub
+            enabled: true
+
+          - name: dhi-vex
+            url: https://github.com/docker-hardened-images/advisories
+            enabled: true
+        EOF
+
+    - name: Run Trivy Vulnerability Scanner on Image with VEX
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
+      env:
+        TRIVY_VEX: repo
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        image-ref: ${{ inputs.image_url }}
+        format: sarif
+        output: trivy-results.sarif
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+        timeout: 15m
+        # No need to setup Trivy again, if the config scan is enabled and ran first
+        skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
+
+
     - name: Run Trivy Vulnerability Scanner on Image
-      if: inputs.trivy == 'true' && inputs.image_url != ''
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex != 'true'
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
       with:
         image-ref: ${{ inputs.image_url }}
@@ -140,6 +176,21 @@ runs:
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.trivy_category }}
+
+    - name: Show Trivy VEX suppressed vulnerabilities
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      env:
+        TRIVY_VEX: repo
+        TRIVY_SHOW_SUPPRESSED: "true"
+        TRIVY_SKIP_VEX_REPO_UPDATE: "true"
+      with:
+        image-ref: ${{ inputs.image_url }}
+        format: table
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+        timeout: 15m
+        skip-setup-trivy: true
+        
 
     #
     # Check results
