@@ -15,6 +15,10 @@ inputs:
     description: "Enable VEX filtering for Trivy vulnerability scans on images. Defaults to false"
     required: false
     default: "false"
+  trivy_vex_provider:
+    description: "VEX source to use when trivy_vex is enabled. Allowed values: aqua, dhi. Defaults to aqua, use dhi if you use a Docker Hardened Image"
+    required: false
+    default: "aqua"
   tfsec:
     description: "A boolean which determines whether or not TFSec security scan will be run. Defaults to true"
     required: false
@@ -99,6 +103,8 @@ runs:
         timeout: 15m
         skip-dirs: ${{ inputs.skip_dirs }}
         skip-files: ${{ inputs.skip_files }}
+        version: v0.74.0
+        cache-dir: ${{ runner.temp }}/trivy-cache
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
@@ -126,22 +132,45 @@ runs:
       shell: bash
       run: docker pull "$IMAGE_URL"
 
-    - name: Configure Trivy VEX repositories
+    - name: Configure Trivy VEX      
       if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
       shell: bash
+      env:
+        VEX_PROVIDER: ${{ inputs.trivy_vex_provider }}
       run: |
-        mkdir -p "$HOME/.trivy/vex"
+        set -euo pipefail
 
-        cat > "$HOME/.trivy/vex/repository.yaml" <<'EOF'
+        case "$VEX_PROVIDER" in
+          aqua)
+            mkdir -p "$HOME/.trivy/vex"
+
+            cat > "$HOME/.trivy/vex/repository.yaml" <<'EOF'
         repositories:
           - name: default
             url: https://github.com/aquasecurity/vexhub
             enabled: true
+        EOF
 
+            echo "VEX provider: Aqua VEX Hub"
+            ;;
+
+          dhi)
+            mkdir -p "$HOME/.trivy/vex"
+
+            cat > "$HOME/.trivy/vex/repository.yaml" <<'EOF'
+        repositories:
           - name: dhi-vex
             url: https://github.com/docker-hardened-images/advisories
             enabled: true
         EOF
+
+            echo "VEX provider: Docker Hardened Images"
+            ;;
+          *)
+            echo "::error::Unsupported trivy_vex_provider '$VEX_PROVIDER'. Allowed values: aqua, dhi."
+            exit 1
+            ;;
+        esac
 
     - name: Run Trivy Vulnerability Scanner on Image with VEX
       if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
@@ -154,6 +183,8 @@ runs:
         output: trivy-results.sarif
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        version: v0.74.0
+        cache-dir: ${{ runner.temp }}/trivy-cache
         # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
@@ -167,6 +198,8 @@ runs:
         output: trivy-results.sarif
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        version: v0.74.0
+        cache-dir: ${{ runner.temp }}/trivy-cache
         # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
@@ -189,6 +222,7 @@ runs:
         format: table
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        cache-dir: ${{ runner.temp }}/trivy-cache
         skip-setup-trivy: true
         
 

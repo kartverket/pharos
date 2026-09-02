@@ -1,0 +1,21 @@
+name: Test Pharos with VEX
+
+on:
+  push:
+    branches:
+      - test-vex-suppression
+
+jobs:
+  test-pharos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run Pharos
+        uses: ./
+        with:
+          image_url: python:3.12-slim-bookworm
+          trivy_vex: true
+          trivy_vex_provider: aqua
