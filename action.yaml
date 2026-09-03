@@ -16,7 +16,7 @@ inputs:
     required: false
     default: "false"
   trivy_vex_provider:
-    description: "VEX source to use when trivy_vex is enabled. Allowed values: aqua, dhi. Defaults to aqua, use dhi if you use a Docker Hardened Image"
+    description: "VEX source. Allowed values: aqua, dhi, dhi-oci. We can use dhi-oci for testing Docker OCI SBOM/VEX attestations."
     required: false
     default: "aqua"
   tfsec:
@@ -166,14 +166,17 @@ runs:
 
             echo "VEX provider: Docker Hardened Images"
             ;;
+            dhi-oci)
+            echo "VEX provider: Docker OCI SBOM/VEX"
+            ;;
           *)
-            echo "::error::Unsupported trivy_vex_provider '$VEX_PROVIDER'. Allowed values: aqua, dhi."
+            echo "::error::Unsupported trivy_vex_provider '$VEX_PROVIDER'. Allowed values: aqua, dhi, dhi-oci."
             exit 1
             ;;
         esac
 
     - name: Run Trivy Vulnerability Scanner on Image with VEX
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider != 'dhi-oci'
       env:
         TRIVY_VEX: repo
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -188,6 +191,22 @@ runs:
         # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
+    - name: Run Trivy Vulnerability Scanner on DHI with OCI
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi-oci'
+      env:
+        TRIVY_VEX: oci
+        TRIVY_SBOM_SOURCES: oci
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+      with:
+        image-ref: ${{ inputs.image_url }}
+        scanners: vuln
+        format: sarif
+        output: trivy-results.sarif
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+        timeout: 15m
+        version: v0.74.0
+        cache-dir: ${{ runner.temp }}/trivy-cache
+        skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
     - name: Run Trivy Vulnerability Scanner on Image
       if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex != 'true'
@@ -204,14 +223,14 @@ runs:
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
-      if: inputs.trivy == 'true' && inputs.image_url != ''
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex_provider != 'dhi-oci'
       uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.trivy_category }}
 
     - name: Show Trivy VEX suppressed vulnerabilities
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider != 'dhi-oci'
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
       env:
         TRIVY_VEX: repo
@@ -222,6 +241,23 @@ runs:
         format: table
         severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         timeout: 15m
+        cache-dir: ${{ runner.temp }}/trivy-cache
+        skip-setup-trivy: true
+
+    - name: Show Trivy DHI OCI suppressed vulnerabilities
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi-oci'
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+      env:
+        TRIVY_VEX: oci
+        TRIVY_SBOM_SOURCES: oci
+        TRIVY_SHOW_SUPPRESSED: "true"
+      with:
+        image-ref: ${{ inputs.image_url }}
+        scanners: vuln
+        format: table
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+        timeout: 15m
+        version: v0.74.0
         cache-dir: ${{ runner.temp }}/trivy-cache
         skip-setup-trivy: true
         
