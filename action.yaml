@@ -15,8 +15,14 @@ inputs:
     description: "Enable VEX filtering for Trivy vulnerability scans on images. Defaults to false"
     required: false
     default: "false"
+  docker_username:
+    description: "Docker username to authenticate to dhi.io"
+    required: false
+  docker_token:
+    description: "Docker access token used to authenticate to dhi.io"
+    required: false
   trivy_vex_provider:
-    description: "VEX source. Allowed values: aqua, dhi, dhi-oci. We can use dhi-oci for testing Docker OCI SBOM/VEX attestations."
+    description: "VEX source. Allowed values: aqua, dhi"
     required: false
     default: "aqua"
   tfsec:
@@ -124,6 +130,15 @@ runs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
+    
+    - name: Log Into Docker Hardened Images Registry
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi' &&
+          inputs.docker_username != ''
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # samme pinned login-action
+      with:
+        registry: dhi.io
+        username: ${{ inputs.docker_username }}
+        password: ${{ inputs.docker_token }}
 
     - name: Pull Image to Scan from Docker
       if: inputs.trivy == 'true' && inputs.image_url != ''
@@ -132,85 +147,134 @@ runs:
       shell: bash
       run: docker pull "$IMAGE_URL"
 
-    - name: Configure Trivy VEX      
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true'
+    - name: Setup Trivy
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex == 'true'
+      uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
+      with:
+        version: v0.74.0
+
+    - name: Configure Trivy VEX repository
+      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi'
       shell: bash
-      env:
-        VEX_PROVIDER: ${{ inputs.trivy_vex_provider }}
       run: |
         set -euo pipefail
 
-        case "$VEX_PROVIDER" in
-          aqua)
-            mkdir -p "$HOME/.trivy/vex"
+        trivy vex repo init
 
-            cat > "$HOME/.trivy/vex/repository.yaml" <<'EOF'
+        # Aqua's VEX Hub plus Docker's public VEX Hub advisories for DHI images.
+        cat > "$HOME/.trivy/vex/repository.yaml" <<'REPO'
         repositories:
           - name: default
             url: https://github.com/aquasecurity/vexhub
             enabled: true
-        EOF
-
-            echo "VEX provider: Aqua VEX Hub"
-            ;;
-
-          dhi)
-            mkdir -p "$HOME/.trivy/vex"
-
-            cat > "$HOME/.trivy/vex/repository.yaml" <<'EOF'
-        repositories:
           - name: dhi-vex
             url: https://github.com/docker-hardened-images/advisories
             enabled: true
-        EOF
+        REPO
 
-            echo "VEX provider: Docker Hardened Images"
-            ;;
-            dhi-oci)
-            echo "VEX provider: Docker OCI SBOM/VEX"
-            ;;
-          *)
-            echo "::error::Unsupported trivy_vex_provider '$VEX_PROVIDER'. Allowed values: aqua, dhi, dhi-oci."
-            exit 1
-            ;;
-        esac
+        trivy vex repo list
+        trivy vex repo download
 
-    - name: Run Trivy Vulnerability Scanner on Image with VEX
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider != 'dhi-oci'
+    - name: Download DHI VEX documents for processing
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex == 'true' &&
+          inputs.trivy_vex_provider == 'dhi'
+      shell: bash
       env:
-        TRIVY_VEX: repo
-      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-      with:
-        image-ref: ${{ inputs.image_url }}
-        format: sarif
-        output: trivy-results.sarif
-        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-        timeout: 15m
-        version: v0.74.0
-        cache-dir: ${{ runner.temp }}/trivy-cache
-        # No need to setup Trivy again, if the config scan is enabled and ran first
-        skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
+        IMAGE_URL: ${{ inputs.image_url }}
+      run: |
+        set -euo pipefail
 
-    - name: Run Trivy Vulnerability Scanner on DHI with OCI
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi-oci'
+        python3 "$GITHUB_ACTION_PATH/scripts/dhi-vex.py" \
+          download \
+          "$IMAGE_URL" \
+          "$RUNNER_TEMP/dhi-vex"
+
+    - name: Run Trivy Vulnerability Scanner with VEX
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex == 'true' &&
+          inputs.trivy_vex_provider != 'dhi'
+      shell: bash
       env:
-        TRIVY_VEX: oci
-        TRIVY_SBOM_SOURCES: oci
-      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-      with:
-        image-ref: ${{ inputs.image_url }}
-        scanners: vuln
-        format: sarif
-        output: trivy-results.sarif
-        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-        timeout: 15m
-        version: v0.74.0
-        cache-dir: ${{ runner.temp }}/trivy-cache
-        skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
+        IMAGE_URL: ${{ inputs.image_url }}
+        TRIVY_DISABLE_VEX_NOTICE: "true"
+      run: |
+        set -euo pipefail
 
+        trivy image \
+          --scanners vuln \
+          --vex repo \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --timeout 15m \
+          --format sarif \
+          --output trivy-results.sarif \
+          --cache-dir "${{ runner.temp }}/trivy-cache" \
+          "$IMAGE_URL"
+
+    # Trivy VEX scan for images using DHI
+    - name: Run Trivy Vulnerability Scanner with DHI VEX
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex == 'true' &&
+          inputs.trivy_vex_provider == 'dhi'
+      shell: bash
+      env:
+        IMAGE_URL: ${{ inputs.image_url }}
+        TRIVY_DISABLE_VEX_NOTICE: "true"
+      run: |
+        set -euo pipefail
+
+        trivy image \
+          --scanners vuln \
+          --vex repo \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --timeout 15m \
+          --format json \
+          --output "$RUNNER_TEMP/trivy-dhi-raw.json" \
+          --cache-dir "${{ runner.temp }}/trivy-cache" \
+          "$IMAGE_URL"
+
+        if docker run --rm --entrypoint sh "$IMAGE_URL" -c "command -v dpkg-query >/dev/null && dpkg-query -W -f='\${binary:Package}\t\${source:Package}\t\${Version}\t\${source:Version}\n'" > "$RUNNER_TEMP/dpkg-source-map.tsv"; then
+          echo "Extracted Debian binary/source package map"
+
+          if ! awk -F '\t' 'NF == 4 && $1 != "" && $2 != "" { found = 1 } END { exit !found }' "$RUNNER_TEMP/dpkg-source-map.tsv"; then
+            echo "::warning::Debian binary/source package map was empty or malformed"
+            : > "$RUNNER_TEMP/dpkg-source-map.tsv"
+          fi
+        else
+          echo "::warning::Could not extract Debian binary/source package map from image"
+          : > "$RUNNER_TEMP/dpkg-source-map.tsv"
+        fi
+
+        python3 "$GITHUB_ACTION_PATH/scripts/dhi-vex.py" \
+          base-layers \
+          "$IMAGE_URL" \
+          "$RUNNER_TEMP/dhi-base-layers.json"
+
+        python3 "$GITHUB_ACTION_PATH/scripts/dhi-vex.py" \
+          filter \
+          "$RUNNER_TEMP/trivy-dhi-raw.json" \
+          "$RUNNER_TEMP/dhi-vex" \
+          "$RUNNER_TEMP/trivy-dhi-filtered.json" \
+          "$RUNNER_TEMP/trivy-dhi-suppressed.json" \
+          "$RUNNER_TEMP/dpkg-source-map.tsv" \
+          "$RUNNER_TEMP/dhi-base-layers.json"
+
+        trivy convert \
+          --format sarif \
+          --output trivy-results.sarif \
+          "$RUNNER_TEMP/trivy-dhi-filtered.json"
+
+    # Default Trivy scan for images without VEX      
     - name: Run Trivy Vulnerability Scanner on Image
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex != 'true'
-      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex != 'true'
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
       with:
         image-ref: ${{ inputs.image_url }}
         format: sarif
@@ -219,48 +283,116 @@ runs:
         timeout: 15m
         version: v0.74.0
         cache-dir: ${{ runner.temp }}/trivy-cache
-        # No need to setup Trivy again, if the config scan is enabled and ran first
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
-    - name: Upload Trivy Scan Results to GitHub Security Tab
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex_provider != 'dhi-oci'
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-      with:
-        sarif_file: trivy-results.sarif
-        category: ${{ inputs.trivy_category }}
+    #- name: Upload Trivy Scan Results to GitHub Security Tab
+     # if: inputs.trivy == 'true' && inputs.image_url != ''
+      #uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+      #with:
+       # sarif_file: trivy-results.sarif
+        #category: ${{ inputs.trivy_category }}
 
-    - name: Show Trivy VEX suppressed vulnerabilities
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider != 'dhi-oci'
-      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+   # Display all vulnnerabilities that were suppressed with VEX for non-DHI images
+    - name: Show Trivy scan results in job summary
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex == 'true' &&
+          inputs.trivy_vex_provider != 'dhi'
+      shell: bash
       env:
-        TRIVY_VEX: repo
+        IMAGE_URL: ${{ inputs.image_url }}
+        TRIVY_DISABLE_VEX_NOTICE: "true"
         TRIVY_SHOW_SUPPRESSED: "true"
-        TRIVY_SKIP_VEX_REPO_UPDATE: "true"
-      with:
-        image-ref: ${{ inputs.image_url }}
-        format: table
-        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-        timeout: 15m
-        cache-dir: ${{ runner.temp }}/trivy-cache
-        skip-setup-trivy: true
-
-    - name: Show Trivy DHI OCI suppressed vulnerabilities
-      if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi-oci'
-      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-      env:
-        TRIVY_VEX: oci
-        TRIVY_SBOM_SOURCES: oci
-        TRIVY_SHOW_SUPPRESSED: "true"
-      with:
-        image-ref: ${{ inputs.image_url }}
-        scanners: vuln
-        format: table
-        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-        timeout: 15m
-        version: v0.74.0
-        cache-dir: ${{ runner.temp }}/trivy-cache
-        skip-setup-trivy: true
+      run: |
+        set -euo pipefail
+        trivy image \
+          --scanners vuln \
+          --vex repo \
+          --skip-vex-repo-update \
+          --show-suppressed \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --format table \
+          --cache-dir "${{ runner.temp }}/trivy-cache" \
+          "$IMAGE_URL" > "$RUNNER_TEMP/trivy-table.txt"
+        echo "### Suppressions by VEX source" >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        grep -oE 'VEX (Repository|Document): [^ ]*' "$RUNNER_TEMP/trivy-table.txt" \
+          | sort | uniq -c | sort -rn \
+          >> "$GITHUB_STEP_SUMMARY" || echo "(no suppression source lines found)" >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo "### Trivy vulnerability scan (VEX applied)"
+          echo
+          echo '```'
+          cat "$RUNNER_TEMP/trivy-table.txt"
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
         
+    # Display all vulnnerabilities in DHI-images that were suppressed with VEX in the workflow
+    - name: Show Trivy DHI scan results in job summary
+      if: inputs.trivy == 'true' &&
+          inputs.image_url != '' &&
+          inputs.trivy_vex == 'true' &&
+          inputs.trivy_vex_provider == 'dhi'
+      shell: bash
+      env:
+        IMAGE_URL: ${{ inputs.image_url }}
+        TRIVY_DISABLE_VEX_NOTICE: "true"
+      run: |
+        set -euo pipefail
+
+
+        trivy image \
+          --scanners vuln \
+          --vex repo \
+          --skip-vex-repo-update \
+          --show-suppressed \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --format table \
+          --cache-dir "${{ runner.temp }}/trivy-cache" \
+          "$IMAGE_URL" > "$RUNNER_TEMP/trivy-dhi-native-vex.txt"
+
+        suppressed_count=$(jq 'length' "$RUNNER_TEMP/trivy-dhi-suppressed.json")
+        remaining_count=$(jq '[.Results[]?.Vulnerabilities[]?] | length' "$RUNNER_TEMP/trivy-dhi-filtered.json")
+        {
+          echo "### DHI VEX post-filter"
+          echo
+          echo "Suppressed by DHI VEX post-filter: $suppressed_count"
+          echo "Remaining vulnerabilities: $remaining_count"
+          echo
+          echo "### All DHI VEX post-filter suppressions"
+          echo '```'
+              printf 'Vulnerability\tPackage\tInstalled version\tSeverity\tBase layer\tVEX status\tJustification\tVEX document\n'
+          jq -r '
+            .[]
+            | [
+                .VulnerabilityID,
+                .PkgName,
+                .InstalledVersion,
+                .Severity,
+                (.Layer.DiffID // ""),
+                .DhiVex.status,
+                (.DhiVex.justification // "" | gsub("[\\t\\r\\n]+"; " ")),
+                (.DhiVex.source | split("/") | last)
+              ]
+            | @tsv
+          ' "$RUNNER_TEMP/trivy-dhi-suppressed.json"
+          echo '```'
+          echo
+          echo "### Trivy-native VEX suppressions"
+          echo
+          echo '```'
+          cat "$RUNNER_TEMP/trivy-dhi-native-vex.txt"
+          echo '```'
+          echo
+          echo "### Trivy vulnerability scan (DHI VEX applied)"
+          echo
+          echo '```'
+          trivy convert \
+            --format table \
+            "$RUNNER_TEMP/trivy-dhi-filtered.json"
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
 
     #
     # Check results
