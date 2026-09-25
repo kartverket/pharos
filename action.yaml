@@ -238,13 +238,11 @@ runs:
           --cache-dir "${{ runner.temp }}/trivy-cache" \
           "$IMAGE_URL"
 
-        if docker run --rm --entrypoint sh "$IMAGE_URL" -c "command -v dpkg-query >/dev/null && dpkg-query -W -f='\${binary:Package}\t\${source:Package}\t\${Version}\t\${source:Version}\n'" > "$RUNNER_TEMP/dpkg-source-map.tsv"; then
-          echo "Extracted Debian binary/source package map"
-
-          if ! awk -F '\t' 'NF == 4 && $1 != "" && $2 != "" { found = 1 } END { exit !found }' "$RUNNER_TEMP/dpkg-source-map.tsv"; then
-            echo "::warning::Debian binary/source package map was empty or malformed"
-            : > "$RUNNER_TEMP/dpkg-source-map.tsv"
-          fi
+         if python3 "$GITHUB_ACTION_PATH/scripts/dhi-vex.py" \
+          debian-source-map \
+          "$IMAGE_URL" \
+          "$RUNNER_TEMP/dpkg-source-map.tsv"; then
+          :
         else
           echo "::warning::Could not extract Debian binary/source package map from image"
           : > "$RUNNER_TEMP/dpkg-source-map.tsv"

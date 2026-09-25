@@ -114,6 +114,53 @@ def command_base_layers(image, output_path):
     print(f"Verified DHI base image: {base_image}")
     print(f"Verified DHI base layers: {len(base_layers)}")
 
+def command_debian_source_map(image, output_path):
+    # Most DHI runtime images have no shell, so read the dpkg database
+    # from a stopped container instead of executing anything inside it.
+    container_id = run("docker", "create", image)
+    status_path = output_path.with_suffix(".status")
+
+    try:
+        subprocess.check_call(["docker", "cp", f"{container_id}:/var/lib/dpkg/status", str(status_path)])
+    finally:
+        subprocess.call(["docker", "rm", "-f", container_id], stdout=subprocess.DEVNULL)
+
+    mappings = []
+
+    for record in status_path.read_text().split("\n\n"):
+        fields = {}
+        current_key = None
+
+        for line in record.splitlines():
+            if line.startswith((" ", "\t")) and current_key:
+                fields[current_key] += "\n" + line
+            elif ":" in line:
+                current_key, value = line.split(":", 1)
+                fields[current_key] = value.strip()
+
+        package_name = fields.get("Package")
+        package_version = fields.get("Version")
+        source = fields.get("Source", "")
+
+        if source:
+            source_parts = source.split()
+            source_name = source_parts[0]
+            source_version = source_parts[1].strip("()") if len(source_parts) > 1 else package_version
+        else:
+            source_name = package_name
+            source_version = package_version
+
+        if package_name and package_version and source_name:
+            mappings.append(f"{package_name}\t{source_name}\t{package_version}\t{source_version}")
+
+    status_path.unlink(missing_ok=True)
+
+    if not mappings:
+        print("::error::Debian package database contained no package mappings", file=sys.stderr)
+        sys.exit(1)
+
+    output_path.write_text("\n".join(mappings) + "\n")
+    print(f"Extracted {len(mappings)} Debian binary/source package mappings")
 
 def download_component(component, output_dir):
     url = f"https://raw.githubusercontent.com/docker-hardened-images/advisories/main/vex/{component}/dhi-{component}.vex.json"
@@ -309,6 +356,8 @@ def main():
         command_download(sys.argv[2], Path(sys.argv[3]))
     elif command == "base-layers" and len(sys.argv) == 4:
         command_base_layers(sys.argv[2], Path(sys.argv[3]))
+    elif command == "debian-source-map" and len(sys.argv) == 4:
+        command_debian_source_map(sys.argv[2], Path(sys.argv[3]))
     elif command == "filter" and len(sys.argv) == 8:
         command_filter(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5]), Path(sys.argv[6]), Path(sys.argv[7]))
     else:
@@ -316,6 +365,7 @@ def main():
             "Usage:\n"
             "  dhi-vex.py download <image> <output-dir>\n"
             "  dhi-vex.py base-layers <image> <output-json>\n"
+            "  dhi-vex.py debian-source-map <image> <output-tsv>\n"
             "  dhi-vex.py filter <trivy-json> <vex-dir> <output-json> <suppressed-json> <source-map> <base-layers>",
             file=sys.stderr,
         )
