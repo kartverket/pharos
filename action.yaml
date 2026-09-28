@@ -102,7 +102,7 @@ runs:
 
     - name: Upload SARIF file
       if: inputs.tfsec == 'true'
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+      uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
       with:
         sarif_file: trivy-config.sarif
         category: trivy-config
@@ -172,7 +172,7 @@ runs:
 
     - name: Upload Trivy Scan Results to GitHub Security Tab
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+      uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.trivy_category }}
