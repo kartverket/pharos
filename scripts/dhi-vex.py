@@ -32,17 +32,19 @@ def normalize_debian_version(version):
     return version
 
 
-def parse_deb_purl(value):
-    if not value.startswith("pkg:deb/debian/"):
+def parse_package_purl(value):
+    prefixes = {"pkg:deb/debian/": "debian", "pkg:apk/alpine/": "alpine"}
+    ecosystem = next((name for prefix, name in prefixes.items() if value.startswith(prefix)), None)
+    if ecosystem is None:
         return None
 
-    path = value.removeprefix("pkg:deb/debian/").split("?", 1)[0]
+    path = value.split("/", 2)[2].split("?", 1)[0]
 
     if "@" not in path:
-        return unquote(path), None
+        return ecosystem, unquote(path), None
 
     name, version = path.split("@", 1)
-    return unquote(name), unquote(version)
+    return ecosystem, unquote(name), unquote(version)
 
 
 def dhi_components(image):
@@ -50,6 +52,7 @@ def dhi_components(image):
 
 
 def dhi_candidates(image):
+    # Buildx provenance helps identify the exact DHI base-image digests that was used to build this image.
     try:
         output = run(
             "docker", "buildx", "imagetools", "inspect", image,
@@ -88,6 +91,7 @@ def command_base_layers(image, output_path):
     child_layers = image_layers(image)
     matches = []
 
+    # A base image will only be trusted when its immutable layer IDs have a prefix of the scanned image.
     for _, candidate in dhi_candidates(image):
         subprocess.check_call(["docker", "pull", candidate], stdout=sys.stderr)
         base_layers = image_layers(candidate)
@@ -115,8 +119,7 @@ def command_base_layers(image, output_path):
     print(f"Verified DHI base layers: {len(base_layers)}")
 
 def command_debian_source_map(image, output_path):
-    # Most DHI runtime images have no shell, so read the dpkg database
-    # from a stopped container instead of executing anything inside it.
+    # Most DHI runtime images don't have a shell, so thedpkg database will be read from a stopped container instead of executing anything inside it
     container_id = run("docker", "create", image)
     status_path = output_path.with_suffix(".status")
 
@@ -194,11 +197,12 @@ def command_download(image, output_dir):
         download_component(component, output_dir)
 
 
-def add_match(matches, vulnerability_id, package_name, version, statement):
+def add_match(matches, vulnerability_id, ecosystem, package_name, version, statement):
     if not vulnerability_id or not package_name:
         return
 
-    key = (vulnerability_id, package_name, normalize_debian_version(version or ""))
+    normalized = normalize_debian_version(version or "") if ecosystem == "debian" else version or ""
+    key = (vulnerability_id, ecosystem, package_name, normalized)
     matches.setdefault(key, []).append(statement)
 
 
@@ -211,6 +215,7 @@ def load_vex_matches(vex_dir):
 
         for statement in document.get("statements", []):
             status = statement.get("status")
+            # Other statuses, like "under_investigation", are not considered valid for suppressing a finding
             if status not in SUPPRESS_STATUSES:
                 continue
 
@@ -222,16 +227,14 @@ def load_vex_matches(vex_dir):
             unversioned_products = []
 
             for product in statement.get("products", []):
-                parsed = parse_deb_purl(product.get("@id", ""))
+                parsed = parse_package_purl(product.get("@id", ""))
                 if parsed:
-                    package_name, version = parsed
-                    (versioned_products if version else unversioned_products).append((package_name, version))
+                    (versioned_products if parsed[2] else unversioned_products).append(parsed)
 
                 for subcomponent in product.get("subcomponents", []):
-                    parsed = parse_deb_purl(subcomponent.get("@id", ""))
+                    parsed = parse_package_purl(subcomponent.get("@id", ""))
                     if parsed:
-                        package_name, version = parsed
-                        (versioned_products if version else unversioned_products).append((package_name, version))
+                        (versioned_products if parsed[2] else unversioned_products).append(parsed)
 
             statement_context = {
                 "status": status,
@@ -241,12 +244,13 @@ def load_vex_matches(vex_dir):
             }
 
             for vulnerability_id in vulnerability_ids:
-                for package_name, version in versioned_products:
-                    add_match(matches, vulnerability_id, package_name, version, statement_context)
+                for ecosystem, package_name, version in versioned_products:
+                    add_match(matches, vulnerability_id, ecosystem, package_name, version, statement_context)
 
-                for package_name, _ in unversioned_products:
-                    for _, version in versioned_products:
-                        add_match(matches, vulnerability_id, package_name, version, statement_context)
+                for ecosystem, package_name, _ in unversioned_products:
+                    for version_ecosystem, _, version in versioned_products:
+                        if ecosystem == version_ecosystem:
+                            add_match(matches, vulnerability_id, ecosystem, package_name, version, statement_context)
 
     return matches
 
@@ -276,7 +280,7 @@ def load_source_map(path):
     return source_map
 
 
-def vulnerability_keys(vulnerability, source_map):
+def vulnerability_keys(vulnerability, source_map, ecosystem="debian"):
     vulnerability_id = vulnerability.get("VulnerabilityID")
     installed = vulnerability.get("InstalledVersion", "")
     package_name = vulnerability.get("PkgName")
@@ -289,12 +293,13 @@ def vulnerability_keys(vulnerability, source_map):
 
         for version in versions:
             if version:
-                yield vulnerability_id, name, normalize_debian_version(version)
+                normalized = normalize_debian_version(version) if ecosystem == "debian" else version
+                yield vulnerability_id, ecosystem, name, normalized
 
-    source_package = source_map.get(package_name or "")
+    source_package = source_map.get(package_name or "") if ecosystem == "debian" else None
     if source_package:
-        yield vulnerability_id, source_package["source_name"], normalize_debian_version(source_package["source_version"])
-        yield vulnerability_id, source_package["source_name"], normalize_debian_version(source_package["binary_version"])
+        yield vulnerability_id, ecosystem, source_package["source_name"], normalize_debian_version(source_package["source_version"])
+        yield vulnerability_id, ecosystem, source_package["source_name"], normalize_debian_version(source_package["binary_version"])
 
 
 def command_filter(input_path, vex_dir, output_path, suppressed_path, source_map_path, base_layers_path):
@@ -321,9 +326,9 @@ def command_filter(input_path, vex_dir, output_path, suppressed_path, source_map
         for vulnerability in vulnerabilities:
             match = None
             layer = vulnerability.get("Layer", {}).get("DiffID")
-
+            # Require both a verified base-layer origin and an exact VEX identity match, this means application-layer and unmatched findings will remain in the report
             if layer in base_layers:
-                for key in vulnerability_keys(vulnerability, source_map):
+                for key in vulnerability_keys(vulnerability, source_map, result.get("Type")):
                     if key in matches:
                         match = matches[key][0]
                         break
