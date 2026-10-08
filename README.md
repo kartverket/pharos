@@ -60,7 +60,7 @@ pharos-job:
   runs-on: ubuntu-latest
   steps:
     - name: "Run Pharos"
-      uses: kartverket/pharos@112c1589d5022bc0cdf3353cb4c6047aa4a3a26f #v0.6.2 
+      uses: kartverket/pharos@<ref> 
       with:
         image_url: $IMAGE_URL
 ```
@@ -68,12 +68,6 @@ pharos-job:
 Here, the `$IMAGE_URL` variable would typically come from the output of a previous build step or job.
 
 To scan a DHI image with DHI VEX, configure the action like this:
-```yaml
-- name: Set up Docker Buildx
-  uses: docker/setup-buildx-action@vX
-  with:
-    driver: docker-container
-```
 ```yaml
 - name: Run Pharos with DHI VEX
   uses: kartverket/pharos@<ref>
@@ -84,5 +78,11 @@ To scan a DHI image with DHI VEX, configure the action like this:
     docker_username: ${{ secrets.DHI_USERNAME }}
     docker_token: ${{ secrets.DHI_TOKEN }}
 ```
-
+Additionally, Docker Builx needs to be included in the image build:
+```yaml
+- name: Set up Docker Buildx
+  uses: docker/setup-buildx-action@<ref>
+  with:
+    driver: docker-container
+```
 For a public image, the `docker_username` and `docker_token` inputs can be left out if the runner can pull the image and its DHI base images without authentication.

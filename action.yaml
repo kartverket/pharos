@@ -109,7 +109,7 @@ runs:
         timeout: 15m
         skip-dirs: ${{ inputs.skip_dirs }}
         skip-files: ${{ inputs.skip_files }}
-        version: v0.74.0
+        version: v0.75.0
         cache-dir: ${{ runner.temp }}/trivy-cache
 
     - name: Upload SARIF file
@@ -153,7 +153,7 @@ runs:
           inputs.trivy_vex == 'true'
       uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
       with:
-        version: v0.74.0
+        version: v0.75.0
 
     - name: Configure Trivy VEX repository
       if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi'
@@ -283,12 +283,12 @@ runs:
         cache-dir: ${{ runner.temp }}/trivy-cache
         skip-setup-trivy: ${{ inputs.tfsec == 'true' }}
 
-    #- name: Upload Trivy Scan Results to GitHub Security Tab
-     # if: inputs.trivy == 'true' && inputs.image_url != ''
-      #uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-      #with:
-       # sarif_file: trivy-results.sarif
-        #category: ${{ inputs.trivy_category }}
+    - name: Upload Trivy Scan Results to GitHub Security Tab
+      if: inputs.trivy == 'true' && inputs.image_url != ''
+      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+      with:
+        sarif_file: trivy-results.sarif
+        category: ${{ inputs.trivy_category }}
 
    # Display all vulnnerabilities that were suppressed with VEX for non-DHI images
     - name: Show Trivy scan results in job summary
