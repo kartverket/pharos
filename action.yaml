@@ -125,7 +125,7 @@ runs:
 
     - name: Log Into GHCR Registry with Token
       if: inputs.trivy == 'true' && inputs.image_url != ''
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -134,7 +134,7 @@ runs:
     - name: Log Into Docker Hardened Images Registry
       if: inputs.trivy == 'true' && inputs.image_url != '' && inputs.trivy_vex == 'true' && inputs.trivy_vex_provider == 'dhi' &&
           inputs.docker_username != ''
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # samme pinned login-action
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # samme pinned login-action
       with:
         registry: dhi.io
         username: ${{ inputs.docker_username }}
